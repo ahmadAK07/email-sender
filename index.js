@@ -74,7 +74,9 @@ async function sendEmailWithImages(url, content, imgFiles, res, to) {
   }
 }
 
-
+app.get("/", (req, res) => {
+    res.json({message: "Email Sender", success: true})
+})
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
