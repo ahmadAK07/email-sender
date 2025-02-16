@@ -5,7 +5,8 @@ const path = require("path");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const multer = require("multer");
-
+const dotenv = require("dotenv");
+dotenv.config();
 const app = express();
 const port = 3000;
 
@@ -19,59 +20,60 @@ const upload = multer({ dest: "uploads/" });
 // Endpoint to handle multiple image uploads
 app.post("/upload-images", upload.array("imgFiles"), async (req, res) => {
   try {
-    const { url, content } = req.body;
-    const imgFiles = req.files; // Array of uploaded image files
+    const { url, content, to } = req.body;
+    const imgFiles = req.files; // Array of uploaded image files (can be empty)
 
-    if (!imgFiles || imgFiles.length === 0) {
-      return res.status(400).json({ error: "No image files uploaded" , success: true});
-    }
-
-    // Send email with multiple image attachments
-    await sendEmailWithImages(url, content, imgFiles, res);
+    // Send email (attachments will be included only if there are files)
+    await sendEmailWithImages(url, content, imgFiles, res, to);
   } catch (error) {
-    res.status(500).json({ error: "Server error", details: error.message , success: true });
+    res.status(500).json({ error: "Server error", details: error.message, success: false });
   }
 });
 
-// Function to send email with multiple image attachments
-async function sendEmailWithImages(url, content, imgFiles, res) {
+// Function to send email with optional attachments
+async function sendEmailWithImages(url, content, imgFiles, res, to) {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: "muhammadahmadamin512@gmail.com",
-      pass: "trqi psxn ttvp qsbr",
+      user: process.env.FROM,
+      pass: process.env.PASS,
     },
   });
 
-  // Attach all uploaded images to email
-  const attachments = imgFiles.map((file) => ({
-    filename: file.originalname,
-    path: file.path,
-  }));
+  // Attach uploaded images if any exist
+  const attachments = imgFiles && imgFiles.length > 0
+    ? imgFiles.map((file) => ({
+        filename: file.originalname,
+        path: file.path,
+      }))
+    : [];
 
   const mailOptions = {
-    from: "muhammadahmadamin512@gmail.com",
-    to: "muhammadahmadhafiz512@gmail.com",
-    subject: "New Images Upload",
+    from: process.env.FROM,
+    to: to,
+    subject: "InfoSave",
     text: `URL: ${url}\n`,
     html: content,
-    attachments,
+    ...(attachments.length > 0 && { attachments }), // Add attachments only if they exist
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: "Images uploaded and email sent successfully" , success: true});
+    res.status(200).json({ message: "Email sent successfully", success: true });
 
-    // Delete all image files after sending the email
-    imgFiles.forEach((file) => {
-      fs.unlink(file.path, (err) => {
-        if (err) console.error("Error deleting image:", err);
+    // Delete uploaded images if any
+    if (attachments.length > 0) {
+      imgFiles.forEach((file) => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error("Error deleting image:", err);
+        });
       });
-    });
+    }
   } catch (error) {
     res.status(500).json({ error: "Error sending email", details: error.message, success: false });
   }
 }
+
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
